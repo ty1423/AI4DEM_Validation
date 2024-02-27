@@ -9,7 +9,6 @@ import torch.nn.functional as F
 import csv
 import matplotlib.pyplot as plt
 from matplotlib.animation import FuncAnimation
-
 # Check if GPU is available 
 is_gpu = torch.cuda.is_available()
 device = torch.device("cuda" if is_gpu else "cpu")
@@ -22,12 +21,14 @@ def create_grid(domain_size, cell_size):
     return grid
 
 # Input Parameters
-domain_size = 100  # Size of the square domain
+domain_size = 20  # Size of the square domain
 cell_size = 1   # Cell size and particle radius
 simulation_time = 1
 kn = 500  # Normal stiffness of the spring
 dn = 0.5  # Normal damping coefficient
 particle_mass = 0.01
+K_graph = 31.2*10000*4
+S_graph = K_graph * (cell_size / domain_size) ** 2
 
 # Module 1: Domain discretisation and initial particle insertion
 # Create grid
@@ -40,8 +41,8 @@ x_grid = np.zeros((1, 1, grid_shape[0], grid_shape[1]))
 y_grid = np.zeros((1, 1, grid_shape[0], grid_shape[1]))
 
 # Insert particles
-x_indices = [50]
-y_indices = [50] # 80
+x_indices = [10]
+y_indices = [19] # 80
 for i, j in zip(x_indices, y_indices):
     x_grid[0, 0, j, i] = i * cell_size
     y_grid[0, 0, j, i] = j * cell_size
@@ -129,7 +130,7 @@ model = AI4DEM().to(device)
 # Module 2: Contact detection and force calculation
 t = 0
 dt = 0.001  # 0.0001
-ntime = 10000
+ntime = 60000
 
 # Convert np.array into torch.tensor and transfer it to GPU
 filter_size = 5 
@@ -144,6 +145,8 @@ fx_grid = torch.zeros(input_shape_global, device=device)
 fy_grid = torch.zeros(input_shape_global, device=device)
 vx_grid = torch.zeros(input_shape_global, device=device)
 vy_grid = torch.zeros(input_shape_global, device=device)
+cell_size_grid=torch.ones(input_shape_global, device=device) * cell_size
+
 
 mask = torch.from_numpy(mask).float().to(device)
 x_grid = torch.from_numpy(x_grid).float().to(device)
@@ -156,28 +159,32 @@ with torch.no_grad():
         [x_grid, y_grid, vx_grid, vy_grid, mask] = model(x_grid, y_grid, vx_grid, vy_grid, fx_grid, fy_grid, mask, cell_size, kn, diffx, diffy, dt, input_shape_global, filter_size)
         print('Time step:', itime, 'Number of particles:', torch.count_nonzero(mask).item()) 
         
-        # Visualize particles
-        yp, xp = torch.where(mask.cpu()[0, 0, :, :] == 1)
-        plt.scatter(xp, yp, c=vy_grid.cpu()[0, 0, yp, xp], cmap='turbo', s=60, vmin=-100, vmax=100)
-        cbar = plt.colorbar()
-        cbar.set_label('$V_{p}$')
-        ax = plt.gca()
-        ax.set_xlim([0, domain_size])
-        ax.set_ylim([0, domain_size])
+        if itime % 2 == 0:
+            # Visualize particles
+            yp, xp = torch.where(mask.cpu()[0, 0, :, :] == 1)
+            plt.scatter(xp, yp, c=vy_grid.cpu()[0, 0, yp, xp], cmap='turbo', s=S_graph, vmin=-20, vmax=20)
+            cbar = plt.colorbar()
+            cbar.set_label('$V_{p}$')
+            ax = plt.gca()
+            ax.set_xlim([0, domain_size])
+            ax.set_ylim([0, domain_size])
+            plt.subplots_adjust(left=0, right=2, top=2, bottom=0)
+            # plt.figure(figsize=(8, 8))
 
-        # Save visualization
-        if itime < 10:
-            save_name = "validation_two/"+str(itime)+".jpg"
-        elif itime >= 10 and itime < 100:
-            save_name = "validation_two/"+str(itime)+".jpg"
-        elif itime >= 100 and itime < 1000:
-            save_name = "validation_two/"+str(itime)+".jpg"
-        elif itime >= 1000 and itime < 10000:
-            save_name = "validation_two/"+str(itime)+".jpg"
-        else:
-            save_name = "validation_two/"+str(itime)+".jpg"
-        plt.savefig(save_name, dpi=200, bbox_inches='tight')
-        plt.close()
 
+
+            # Save visualization
+            if itime < 10:
+                save_name = "validation_two_single_particle_drop/"+str(itime)+".jpg"
+            elif itime >= 10 and itime < 100:
+                save_name = "validation_two_single_particle_drop/"+str(itime)+".jpg"
+            elif itime >= 100 and itime < 1000:
+                save_name = "validation_two_single_particle_drop/"+str(itime)+".jpg"
+            elif itime >= 1000 and itime < 10000:
+                save_name = "validation_two_single_particle_drop/"+str(itime)+".jpg"
+            else:
+                save_name = "validation_two_single_particle_drop/"+str(itime)+".jpg"
+            plt.savefig(save_name, dpi=200, bbox_inches='tight')
+            plt.close()
 end = time.time()
 print('Elapsed time:', end - start)
